@@ -154,7 +154,7 @@ function popup(d, typ) {
 
 const markers = new Map();
 function mk(d, typ) {
-  const m = L.circleMarker(d.c, { radius: TOPID.has(d.id) ? 8 : 5, weight: TOPID.has(d.id) ? 2.5 : 1, renderer: canvas });
+  const m = L.circleMarker(d.c, { radius: TOPID.has(d.id) ? 8 : (typ === 'r' ? 4 : 5), weight: TOPID.has(d.id) ? 2.5 : (typ === 'r' ? 0.5 : 1), renderer: canvas });
   m.d = d; m.typ = typ; style(m);
   m.bindPopup(() => popup(d, typ), { maxWidth: 320 });
   m.on('popupopen', () => { if (shape) shape.remove(); shape = L.polygon(d.p, { color: '#111', weight: 2, fill: true, fillOpacity: .08, dashArray: '4 3', interactive: false }).addTo(map); });
@@ -164,7 +164,7 @@ function mk(d, typ) {
 function style(m) {
   const s = sent[m.d.id], top = TOPID.has(m.d.id);
   const c = s ? '#8b8f98' : (m.typ === 'z' ? '#e07b00' : '#2f8a3e');
-  m.setStyle({ color: top ? '#c62828' : (s ? '#6d7079' : '#ffffff'), fillColor: c, fillOpacity: s ? .55 : .9 });
+  m.setStyle({ color: top ? '#c62828' : (s ? '#6d7079' : (m.typ === 'z' ? '#ffffff' : '#1e6b2b')), fillColor: c, fillOpacity: s ? .55 : .9 });
 }
 const gZ = L.layerGroup(ZAB.map(d => mk(d, 'z'))), gR = L.layerGroup(ROL.map(d => mk(d, 'r')));
 
