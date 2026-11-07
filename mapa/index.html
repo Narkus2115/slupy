@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Działki pod liniami – Wielkopolska</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+:root{--ink:#1d2330;--muted:#5d6472;--line:#dfe3ea;--panel:#ffffff;--blue:#1f5fd1;--blue2:#7aa3ec;--zab:#e07b00;--rol:#2f8a3e;--sent:#8b8f98;--top:#c62828}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:var(--ink)}
+#app{display:flex;height:100%}
+#side{width:330px;flex:none;background:var(--panel);border-right:1px solid var(--line);overflow:auto;padding:14px 16px}
+#map{flex:1}
+h1{font-size:17px;margin:0 0 2px}
+.sub{color:var(--muted);font-size:12.5px;margin-bottom:12px}
+.box{border-top:1px solid var(--line);padding:10px 0}
+.box h2{font-size:13px;margin:0 0 6px;color:var(--muted);font-weight:600}
+label.chk{display:flex;gap:8px;align-items:center;margin:4px 0;cursor:pointer}
+.sw{display:inline-block;width:12px;height:12px;border-radius:50%;flex:none}
+.sw.l{border-radius:0;height:4px;width:16px}
+.stats{display:grid;grid-template-columns:1fr auto;gap:2px 10px;font-variant-numeric:tabular-nums}
+.stats b{text-align:right}
+input[type=search]{width:100%;padding:7px 9px;border:1px solid var(--line);border-radius:6px;font:inherit}
+button{font:inherit;cursor:pointer;border:1px solid var(--line);background:#f5f7fa;border-radius:6px;padding:6px 10px}
+button.pri{background:var(--rol);border-color:var(--rol);color:#fff}
+button.sent{background:var(--sent);border-color:var(--sent);color:#fff}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+ol.top{margin:0;padding-left:20px}
+ol.top li{margin:3px 0;cursor:pointer;color:var(--blue)}
+ol.top li.s{color:var(--sent);text-decoration:line-through}
+.pop b{font-size:14px}
+.pop table{border-collapse:collapse;margin:6px 0;font-variant-numeric:tabular-nums}
+.pop td{padding:1px 8px 1px 0;vertical-align:top}
+.pop td:first-child{color:var(--muted)}
+.pop .warn{color:#a15c00;font-size:12px}
+.pop a{color:var(--blue)}
+.note{font-size:12px;color:var(--muted)}
+.tag{position:absolute;font:700 11px system-ui;color:#fff;background:var(--top);border-radius:9px;padding:0 5px;border:1px solid #fff}
+@media (max-width:760px){#app{flex-direction:column}#side{width:auto;height:42%;border-right:0;border-bottom:1px solid var(--line)}}
+</style>
+</head>
+<body>
+<div id="app">
+  <aside id="side">
+    <h1>Działki pod liniami energetycznymi</h1>
+    <div class="sub">Wielkopolska. Linie: OpenStreetMap, potwierdzane w GESUT. Działki: GUGiK (ULDK). Adresy: PRG.</div>
+
+    <div class="box">
+      <h2>Warstwy</h2>
+      <label class="chk"><input type="checkbox" id="lZab" checked><span class="sw" style="background:var(--zab)"></span>Działki zabudowane (z adresem)</label>
+      <label class="chk"><input type="checkbox" id="lRol" checked><span class="sw" style="background:var(--rol)"></span>Działki rolne i niezabudowane</label>
+      <label class="chk"><input type="checkbox" id="lWN" checked><span class="sw l" style="background:var(--blue)"></span>Linie 110–400 kV</label>
+      <label class="chk"><input type="checkbox" id="lSN" checked><span class="sw l" style="background:var(--blue2)"></span>Linie średniego i niskiego napięcia</label>
+      <label class="chk"><input type="checkbox" id="lGesut"><span class="sw l" style="background:#d1338f"></span>Rządowa ewidencja sieci (GESUT, od zbliżenia)</label>
+    </div>
+
+    <div class="box">
+      <h2>Filtry</h2>
+      <label class="chk"><input type="checkbox" id="fSent">Ukryj działki z wysłaną ofertą</label>
+      <label class="chk"><input type="checkbox" id="fRoad" checked>Ukryj wąskie działki (drogi, rowy)</label>
+      <label class="chk"><input type="checkbox" id="fMin">Tylko szacunek powyżej 20 000 zł</label>
+      <label class="chk"><input type="checkbox" id="fPole">Tylko działki ze słupem</label>
+      <select id="fOp" style="width:100%;padding:6px;margin:6px 0;border:1px solid var(--line);border-radius:6px;font:inherit">
+        <option value="">Wszyscy właściciele linii</option>
+        <option>PSE</option><option>Enea Operator</option><option>Energa Operator</option><option>Tauron Dystrybucja</option>
+      </select>
+      <input type="search" id="q" placeholder="Szukaj: gmina, miejscowość, ulica, nr działki">
+    </div>
+
+    <div class="box">
+      <h2>Podsumowanie</h2>
+      <div class="stats" id="stats"></div>
+    </div>
+
+    <div class="box">
+      <h2>10 najbardziej zyskownych</h2>
+      <ol class="top" id="top"></ol>
+    </div>
+
+    <div class="box">
+      <h2>Wysłane oferty</h2>
+      <div class="note" id="saveNote">Zaznaczenia zapisują się w tej przeglądarce na tym komputerze. Rób kopię co jakiś czas.</div>
+      <div class="row" style="margin-top:8px">
+        <button id="exp">Zapisz kopię</button>
+        <button id="imp">Wczytaj kopię</button>
+        <button id="csv">Lista do Excela</button>
+        <input type="file" id="impFile" accept=".json" hidden>
+      </div>
+    </div>
+    <div class="box note">Szacunek: pas linii w działce × cena m² × współczynnik 0,3–0,5 (§ 32 rozporządzenia o wycenie) plus 6 lat bezumownego korzystania (założenie 6% rocznie). Działki rolne liczone po średniej cenie GUS 7,1 zł/m². To orientacja, nie wycena.</div>
+  </aside>
+  <div id="map"></div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<div id="gate" hidden style="position:fixed;inset:0;z-index:9999;background:#f4f6f9;display:flex;align-items:center;justify-content:center;padding:16px">
+  <form id="gateForm" style="background:#fff;border:1px solid var(--line);border-radius:10px;padding:22px;max-width:360px;width:100%">
+    <h1 style="margin-bottom:6px">Działki pod liniami</h1>
+    <p class="note" style="margin:0 0 14px">Mapa jest zaszyfrowana. Wpisz hasło, które dostałeś od Kacpra.</p>
+    <input id="pw" type="password" autocomplete="current-password" style="width:100%;padding:9px;border:1px solid var(--line);border-radius:6px;font:inherit" placeholder="Hasło">
+    <button class="pri" style="width:100%;margin-top:10px;padding:9px" type="submit">Otwórz mapę</button>
+    <div id="gateMsg" class="note" style="margin-top:10px"></div>
+  </form>
+</div>
+<script>window.__noLocal = false;</script>
+<script src="dane.js" onerror="window.__noLocal = true"></script>
+<script>
+function start() {
+const KEY = 'slupy_oferty_v1';
+let sent = {};
+try { sent = JSON.parse(localStorage.getItem(KEY) || '{}'); } catch (e) { document.getElementById('saveNote').textContent = 'Ta przeglądarka nie pozwala zapisywać. Używaj przycisku „Zapisz kopię”.'; }
+const save = () => { try { localStorage.setItem(KEY, JSON.stringify(sent)); } catch (e) {} };
+
+const map = L.map('map', { preferCanvas: true }).setView([52.35, 17.3], 8);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(map);
+const canvas = L.canvas({ padding: 0.5 });
+const gesut = L.tileLayer.wms('https://integracja.gugik.gov.pl/cgi-bin/KrajowaIntegracjaUzbrojeniaTerenu', { layers: 'przewod_elektroenergetyczny', format: 'image/png', transparent: true, minZoom: 15, maxZoom: 19 });
+
+// linie na niebiesko
+const gWN = L.layerGroup(), gSN = L.layerGroup();
+for (const l of LINIE) {
+  const wn = !/SN|nN/.test(l.k);
+  L.polyline(l.c, { color: wn ? '#1f5fd1' : '#7aa3ec', weight: wn ? (l.k === '400 kV' ? 3.2 : l.k === '220 kV' ? 2.6 : 2) : 1.2, opacity: wn ? .9 : .75, renderer: canvas, interactive: false }).addTo(wn ? gWN : gSN);
+}
+gWN.addTo(map); gSN.addTo(map);
+
+const fmt = n => n.toLocaleString('pl-PL');
+const zl = n => n >= 1e6 ? (n / 1e6).toLocaleString('pl-PL', { maximumFractionDigits: 1 }) + ' mln zł' : fmt(Math.round(n / 1000) * 1000) + ' zł';
+const TOPID = new Map(TOP.map(t => [t.id, t.n]));
+let shape = null;
+
+function popup(d, typ) {
+  const s = sent[d.id];
+  const gm = `https://www.google.com/maps?q=${d.c[0]},${d.c[1]}&t=k`;
+  const gp = `https://mapy.geoportal.gov.pl/imap/Imgp_2.html?identifyParcel=${encodeURIComponent(d.id)}`;
+  const topn = TOPID.get(d.id);
+  return `<div class="pop"><b>${topn ? '★ ' + topn + '. ' : ''}${d.a}</b><br>${d.g}${typ === 'r' && d.z ? ' · w działce jest adres' : ''}
+  <table>
+  <tr><td>Działka</td><td>${d.nr}, obręb ${d.ob}</td></tr>
+  <tr><td>Linia</td><td>${d.k}${d.sl ? ', słupy na działce: ' + d.sl : ''}</td></tr>
+  <tr><td>Właściciel linii</td><td>${d.op || 'nieznany'}</td></tr>
+  <tr><td>Pas linii</td><td>${fmt(d.pas)} m² (${d.pr}% z ${fmt(d.pw)} m²)</td></tr>
+  <tr><td>Szacunek</td><td>${zl(d.w1)} – ${zl(d.w2)}</td></tr>
+  </table>
+  ${typ === 'r' ? '<div class="warn">Liczone jako grunt rolny. Jeśli plan miejscowy przewiduje zabudowę, kwota może być wielokrotnie wyższa.</div>' : ''}
+  ${d.dr ? '<div class="warn">Bardzo wąska działka: może to być droga albo rów.</div>' : ''}
+  <div style="margin:6px 0"><a href="${gm}" target="_blank" rel="noopener">Google Maps</a> · <a href="${gp}" target="_blank" rel="noopener">Geoportal</a> · <span class="note">${d.id}</span></div>
+  <button class="${s ? 'sent' : 'pri'}" data-id="${d.id}">${s ? '✓ Oferta wysłana ' + s.d + ' (cofnij)' : 'Oznacz: oferta wysłana'}</button></div>`;
+}
+
+const markers = new Map();
+function mk(d, typ) {
+  const m = L.circleMarker(d.c, { radius: TOPID.has(d.id) ? 8 : 5, weight: TOPID.has(d.id) ? 2.5 : 1, renderer: canvas });
+  m.d = d; m.typ = typ; style(m);
+  m.bindPopup(() => popup(d, typ), { maxWidth: 320 });
+  m.on('popupopen', () => { if (shape) shape.remove(); shape = L.polygon(d.p, { color: '#111', weight: 2, fill: true, fillOpacity: .08, dashArray: '4 3', interactive: false }).addTo(map); });
+  m.on('popupclose', () => { if (shape) { shape.remove(); shape = null; } });
+  markers.set(d.id, m); return m;
+}
+function style(m) {
+  const s = sent[m.d.id], top = TOPID.has(m.d.id);
+  const c = s ? '#8b8f98' : (m.typ === 'z' ? '#e07b00' : '#2f8a3e');
+  m.setStyle({ color: top ? '#c62828' : (s ? '#6d7079' : '#ffffff'), fillColor: c, fillOpacity: s ? .55 : .9 });
+}
+const gZ = L.layerGroup(ZAB.map(d => mk(d, 'z'))), gR = L.layerGroup(ROL.map(d => mk(d, 'r')));
+
+document.addEventListener('click', e => {
+  const b = e.target.closest('.pop button[data-id]');
+  if (!b) return;
+  const id = b.dataset.id;
+  if (sent[id]) delete sent[id]; else sent[id] = { d: new Date().toISOString().slice(0, 10) };
+  save(); const m = markers.get(id); style(m); m.setPopupContent(popup(m.d, m.typ)); apply(); renderTop();
+});
+
+const $ = id => document.getElementById(id);
+function visible(m) {
+  const d = m.d, q = $('q').value.trim().toLowerCase();
+  if ($('fSent').checked && sent[d.id]) return false;
+  if ($('fRoad').checked && d.dr) return false;
+  if ($('fMin').checked && d.w2 < 20000) return false;
+  if ($('fPole').checked && !d.sl) return false;
+  if ($('fOp').value && !(d.op || '').startsWith($('fOp').value)) return false;
+  if (q && !(d.a + ' ' + d.g + ' ' + d.nr + ' ' + d.ob).toLowerCase().includes(q)) return false;
+  return true;
+}
+function apply() {
+  let cz = 0, cr = 0, vs = 0, ns = 0;
+  for (const [g, show, arr] of [[gZ, $('lZab').checked, 'z'], [gR, $('lRol').checked, 'r']]) {
+    g.eachLayer(m => {
+      const v = show && visible(m);
+      if (v && !map.hasLayer(m)) m.addTo(map); if (!v && map.hasLayer(m)) m.remove();
+      if (v) { arr === 'z' ? cz++ : cr++; vs += m.d.w2; }
+      if (sent[m.d.id]) ns++;
+    });
+  }
+  $('stats').innerHTML = `<span>Zabudowane na mapie</span><b>${fmt(cz)}</b><span>Rolne na mapie</span><b>${fmt(cr)}</b><span>Szacunek górny (widoczne)</span><b>${zl(vs)}</b><span>Wysłane oferty</span><b>${fmt(ns)}</b><span>Działek rolnych zebranych</span><b>${fmt(META.rolne)}</b>`;
+}
+['fSent', 'fRoad', 'fMin', 'fPole', 'fOp', 'lZab', 'lRol'].forEach(id => $(id).addEventListener('change', apply));
+let t; $('q').addEventListener('input', () => { clearTimeout(t); t = setTimeout(apply, 250); });
+$('lWN').addEventListener('change', e => e.target.checked ? gWN.addTo(map) : gWN.remove());
+$('lSN').addEventListener('change', e => e.target.checked ? gSN.addTo(map) : gSN.remove());
+$('lGesut').addEventListener('change', e => e.target.checked ? gesut.addTo(map) : gesut.remove());
+
+function renderTop() {
+  $('top').innerHTML = TOP.map(x => `<li data-id="${x.id}" class="${sent[x.id] ? 's' : ''}">${x.a}</li>`).join('');
+  $('top').querySelectorAll('li').forEach(li => li.onclick = () => { const m = markers.get(li.dataset.id); if (!m) return; if (!map.hasLayer(m)) m.addTo(map); map.setView(m.getLatLng(), 16); m.openPopup(); });
+}
+function download(name, text, type) { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text], { type })); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000); }
+$('exp').onclick = () => download(`oferty-${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify(sent, null, 1), 'application/json');
+$('imp').onclick = () => $('impFile').click();
+$('impFile').onchange = async e => { const f = e.target.files[0]; if (!f) return; try { const o = JSON.parse(await f.text()); Object.assign(sent, o); save(); markers.forEach(style); apply(); renderTop(); } catch (err) { alert('To nie jest plik kopii z tej mapy.'); } };
+$('csv').onclick = () => {
+  const rows = [['typ', 'adres', 'gmina', 'dzialka', 'obreb', 'id', 'linia', 'pas_m2', 'szacunek_min', 'szacunek_max', 'oferta_wyslana']];
+  markers.forEach(m => { const d = m.d; rows.push([m.typ === 'z' ? 'zabudowana' : 'rolna', d.a, d.g, d.nr, d.ob, d.id, d.k, d.pas, d.w1, d.w2, sent[d.id]?.d || '']); });
+  download('dzialki-pod-liniami.csv', '﻿' + rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(';')).join('\n'), 'text/csv');
+};
+renderTop(); apply();
+}
+
+async function unlock(pass) {
+  const buf = new Uint8Array(await (await fetch('dane.enc', { cache: 'no-store' })).arrayBuffer());
+  const salt = buf.slice(0, 16), iv = buf.slice(16, 28), data = buf.slice(28);
+  const base = await crypto.subtle.importKey('raw', new TextEncoder().encode(pass), 'PBKDF2', false, ['deriveKey']);
+  const key = await crypto.subtle.deriveKey({ name: 'PBKDF2', salt, iterations: 250000, hash: 'SHA-256' }, base, { name: 'AES-GCM', length: 256 }, false, ['decrypt']);
+  const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, data);
+  const text = await new Response(new Blob([plain]).stream().pipeThrough(new DecompressionStream('gzip'))).text();
+  (new Function(text))();
+}
+if (window.LINIE) start();
+else {
+  const gate = document.getElementById('gate'); gate.hidden = false;
+  document.getElementById('pw').focus();
+  let busy = false;
+  document.getElementById('gateForm').addEventListener('submit', async e => {
+    e.preventDefault();
+    if (busy || window.__started) return; busy = true;
+    const btn = e.target.querySelector('button'); btn.disabled = true;
+    const msg = document.getElementById('gateMsg'); msg.textContent = 'Odszyfrowuję… (kilka sekund)';
+    try { await unlock(document.getElementById('pw').value); gate.hidden = true; window.__started = true; start(); }
+    catch (err) { msg.textContent = 'Złe hasło albo nie udało się pobrać danych.'; }
+    busy = false; btn.disabled = false;
+  });
+}
+</script>
+</body>
+</html>
