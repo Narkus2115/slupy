@@ -51,9 +51,16 @@ ol.top li.s{color:var(--sent);text-decoration:line-through}
     <div class="box">
       <h2>Warstwy</h2>
       <label class="chk"><input type="checkbox" id="lZab" checked><span class="sw" style="background:var(--zab)"></span>Działki zabudowane (z adresem)</label>
-      <label class="chk"><input type="checkbox" id="lRol" checked><span class="sw" style="background:var(--rol)"></span>Działki rolne i niezabudowane</label>
-      <label class="chk"><input type="checkbox" id="lWN" checked><span class="sw l" style="background:var(--blue)"></span>Linie 110–400 kV</label>
-      <label class="chk"><input type="checkbox" id="lSN" checked><span class="sw l" style="background:var(--blue2)"></span>Linie średniego i niskiego napięcia</label>
+      <label class="chk"><input type="checkbox" id="lRol" checked><span class="sw" style="background:var(--rol)"></span>Działki rolne i niezabudowane <span class="note">(po przybliżeniu)</span></label>
+      <label class="chk"><input type="checkbox" id="lWN" checked><span class="sw l" style="background:#1d2330;height:4px"></span>Linie 110–400 kV (grube)</label>
+      <label class="chk"><input type="checkbox" id="lSN" checked><span class="sw l" style="background:#1d2330;height:2px;opacity:.5"></span>Linie średniego i niskiego napięcia (cienkie)</label>
+      <div class="note" style="margin:6px 0 2px">Kolor linii = właściciel:</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:2px 10px;font-size:13px">
+        <span><span class="sw l" style="background:#1a3fb8"></span> PSE</span>
+        <span><span class="sw l" style="background:#0097a7"></span> Enea Operator</span>
+        <span><span class="sw l" style="background:#7b3fe4"></span> Energa Operator</span>
+        <span><span class="sw l" style="background:#d81b60"></span> Tauron</span>
+      </div>
       <label class="chk"><input type="checkbox" id="lGesut"><span class="sw l" style="background:#d1338f"></span>Rządowa ewidencja sieci (GESUT, od zbliżenia)</label>
     </div>
 
@@ -121,10 +128,11 @@ const canvas = L.canvas({ padding: 0.5 });
 const gesut = L.tileLayer.wms('https://integracja.gugik.gov.pl/cgi-bin/KrajowaIntegracjaUzbrojeniaTerenu', { layers: 'przewod_elektroenergetyczny', format: 'image/png', transparent: true, minZoom: 15, maxZoom: 19 });
 
 // linie na niebiesko
+const OPCOL = { 'PSE': '#1a3fb8', 'Enea Operator': '#0097a7', 'Energa Operator': '#7b3fe4', 'Tauron Dystrybucja': '#d81b60', '': '#6f7f99' };
 const gWN = L.layerGroup(), gSN = L.layerGroup();
 for (const l of LINIE) {
   const wn = !/SN|nN/.test(l.k);
-  L.polyline(l.c, { color: wn ? '#1f5fd1' : '#7aa3ec', weight: wn ? (l.k === '400 kV' ? 3.2 : l.k === '220 kV' ? 2.6 : 2) : 1.2, opacity: wn ? .9 : .75, renderer: canvas, interactive: false }).addTo(wn ? gWN : gSN);
+  L.polyline(l.c, { color: OPCOL[l.o] || OPCOL[''], weight: wn ? (l.k === '400 kV' ? 3.4 : l.k === '220 kV' ? 2.8 : 2.2) : 1.3, opacity: wn ? .95 : .6, renderer: canvas, interactive: false }).addTo(wn ? gWN : gSN);
 }
 gWN.addTo(map); gSN.addTo(map);
 
@@ -189,7 +197,8 @@ function visible(m) {
 }
 function apply() {
   let cz = 0, cr = 0, vs = 0, ns = 0;
-  for (const [g, show, arr] of [[gZ, $('lZab').checked, 'z'], [gR, $('lRol').checked, 'r']]) {
+  const zoomOk = map.getZoom() >= 11;
+  for (const [g, show, arr] of [[gZ, $('lZab').checked, 'z'], [gR, $('lRol').checked && zoomOk, 'r']]) {
     g.eachLayer(m => {
       const v = show && visible(m);
       if (v && !map.hasLayer(m)) m.addTo(map); if (!v && map.hasLayer(m)) m.remove();
@@ -218,6 +227,7 @@ $('csv').onclick = () => {
   markers.forEach(m => { const d = m.d; rows.push([m.typ === 'z' ? 'zabudowana' : 'rolna', d.a, d.g, d.nr, d.ob, d.id, d.k, d.pas, d.w1, d.w2, sent[d.id]?.d || '']); });
   download('dzialki-pod-liniami.csv', '﻿' + rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(';')).join('\n'), 'text/csv');
 };
+map.on('zoomend', apply);
 renderTop(); apply();
 }
 
