@@ -99,7 +99,7 @@ ol.top li.s{color:var(--sent);text-decoration:line-through}
   <form id="gateForm" style="background:#fff;border:1px solid var(--line);border-radius:10px;padding:22px;max-width:360px;width:100%">
     <h1 style="margin-bottom:6px">Działki pod liniami</h1>
     <p class="note" style="margin:0 0 14px">Mapa jest zaszyfrowana. Wpisz hasło, które dostałeś od Kacpra.</p>
-    <input id="pw" type="password" autocomplete="current-password" style="width:100%;padding:9px;border:1px solid var(--line);border-radius:6px;font:inherit" placeholder="Hasło">
+    <input id="pw" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" style="width:100%;padding:9px;border:1px solid var(--line);border-radius:6px;font:inherit" placeholder="Hasło">
     <button class="pri" style="width:100%;margin-top:10px;padding:9px" type="submit">Otwórz mapę</button>
     <div id="gateMsg" class="note" style="margin-top:10px"></div>
   </form>
@@ -220,7 +220,11 @@ renderTop(); apply();
 }
 
 async function unlock(pass) {
-  const buf = new Uint8Array(await (await fetch('dane.enc', { cache: 'no-store' })).arrayBuffer());
+  pass = pass.trim().toLowerCase().replace(/\s+/g, '');
+  if (!window.crypto?.subtle || typeof DecompressionStream === 'undefined') throw new Error('stara');
+  const res = await fetch('dane.enc', { cache: 'no-store' });
+  if (!res.ok) throw new Error('siec');
+  const buf = new Uint8Array(await res.arrayBuffer());
   const salt = buf.slice(0, 16), iv = buf.slice(16, 28), data = buf.slice(28);
   const base = await crypto.subtle.importKey('raw', new TextEncoder().encode(pass), 'PBKDF2', false, ['deriveKey']);
   const key = await crypto.subtle.deriveKey({ name: 'PBKDF2', salt, iterations: 250000, hash: 'SHA-256' }, base, { name: 'AES-GCM', length: 256 }, false, ['decrypt']);
@@ -239,7 +243,11 @@ else {
     const btn = e.target.querySelector('button'); btn.disabled = true;
     const msg = document.getElementById('gateMsg'); msg.textContent = 'Odszyfrowuję… (kilka sekund)';
     try { await unlock(document.getElementById('pw').value); gate.hidden = true; window.__started = true; start(); }
-    catch (err) { msg.textContent = 'Złe hasło albo nie udało się pobrać danych.'; }
+    catch (err) {
+      msg.textContent = err.message === 'stara' ? 'Ta przeglądarka jest za stara. Otwórz mapę w aktualnym Chrome albo Safari.'
+        : err.message === 'siec' ? 'Nie udało się pobrać danych mapy. Sprawdź internet i odśwież stronę.'
+        : 'Złe hasło. Sprawdź, czy wpisujesz je dokładnie tak, jak dostałeś.';
+    }
     busy = false; btn.disabled = false;
   });
 }
